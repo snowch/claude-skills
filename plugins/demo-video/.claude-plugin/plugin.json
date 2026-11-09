@@ -1,0 +1,7 @@
+{
+  "name": "demo-video",
+  "version": "0.1.0",
+  "description": "Record narrated 4K product demo videos of web apps with Playwright and a local TTS voice: a silent master, a narrated reference and a shot list.",
+  "author": { "name": "Chris Snow" },
+  "keywords": ["demo", "video", "screen recording", "playwright", "tts", "marketing"]
+}

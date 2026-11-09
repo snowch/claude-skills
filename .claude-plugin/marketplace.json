@@ -1,0 +1,14 @@
+{
+  "name": "snowch-skills",
+  "owner": { "name": "Chris Snow" },
+  "metadata": { "description": "Claude Code skills, one plugin each." },
+  "plugins": [
+    {
+      "name": "demo-video",
+      "source": "./plugins/demo-video",
+      "description": "Record narrated 4K product demo videos of web apps with Playwright and a local TTS voice.",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}
