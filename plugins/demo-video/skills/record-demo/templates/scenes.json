@@ -1,0 +1,19 @@
+[
+ {
+  "id": "intro",
+  "step": "Open on the problem: the backlog nobody can work through",
+  "text": "Every team has a queue like this: hundreds of requests, no owner, and no way to tell which ones matter. This view shows the open requests for one demo workspace."
+ },
+ {
+  "id": "triage",
+  "step": "Triage in one click, with the reason shown",
+  "text": "One click sorts them by impact, and each one shows why it was ranked where it is, so a person can check it instead of starting from scratch.",
+  "say": "One click sorts them by impact, and each one shows why it was ranked where it is, so a person can check it, instead of starting from scratch."
+ },
+ {
+  "id": "api",
+  "step": "Same data from code: REST and JSON",
+  "text": "The same ranking is available over the REST API as JSON, so scripts and dashboards use exactly what the team sees.",
+  "say": "The same ranking is available over the rest API, as Jason, so scripts and dashboards use exactly what the team sees."
+ }
+]
