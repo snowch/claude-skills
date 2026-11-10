@@ -15,9 +15,9 @@ In Claude Code:
 
 | Plugin | Skill | What it does |
 |---|---|---|
-| [demo-video](plugins/demo-video) | `record-demo` | Records a narrated product demo of a web app as one clean 4K take, scripted with Playwright and voiced by a local TTS model (Kokoro). Delivers a silent master for an editor, a narrated reference copy with captions, and a timecoded shot list. Needs macOS on Apple Silicon, `uv`, `ffmpeg` and Chrome. |
+| [demo-video](plugins/demo-video) | `record-demo` | Records a narrated product demo of a web app as one clean 4K take, scripted with Playwright and voiced by a local TTS model (Kokoro). Delivers a silent master for an editor, a narrated reference copy with captions, and a timecoded shot list. Also narrates a slide deck in the same voice, to stand alone or splice around the demo, and checks every clip with Whisper. Needs macOS on Apple Silicon, `uv`, `ffmpeg` and Chrome. |
 
-Once installed, ask Claude something like "record a narrated demo of the app at http://localhost:3000 for marketing".
+Once installed, ask Claude something like "record a narrated demo of the app at http://localhost:3000 for marketing", or "narrate this deck in the same voice as the demo".
 
 ## Adding a skill
 

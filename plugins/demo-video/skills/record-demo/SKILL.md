@@ -1,11 +1,11 @@
 ---
 name: record-demo
-description: Record a narrated product demo video of a web app, scripted with Playwright, as a clean 4K "golden take" with a local TTS voice. Delivers a silent 4K master for an editor, a narrated reference copy with captions, and a timecoded shot list. Use when someone wants a demo video, screen recording, walkthrough or product tour of a web app, wants it narrated or voiced, wants footage for marketing or a launch video, or wants to re-record an existing demo after the app changed.
+description: Record a narrated product demo video of a web app, scripted with Playwright, as a clean 4K "golden take" with a local TTS voice. Delivers a silent 4K master for an editor, a narrated reference copy with captions, and a timecoded shot list. Use when someone wants a demo video, screen recording, walkthrough or product tour of a web app, wants it narrated or voiced, wants footage for marketing or a launch video, wants to re-record an existing demo after the app changed, or wants a narrated walkthrough of a slide deck (on its own, or spliced around the demo).
 ---
 
 # Record a demo video
 
-The result is one continuous, automated take of the real app. It's scripted, so it can be re-recorded any time the app changes, and every take is identical apart from the change. Narration comes from Kokoro-82M, running locally.
+The result is one continuous, automated take of the real app. It's scripted, so it can be re-recorded any time the app changes, and every take is identical apart from the change. Narration comes from Kokoro-82M, running locally. The same tools narrate a slide deck: see [Narrate a deck](#narrate-a-deck).
 
 **Deliverables**, all in `WORKDIR/out/`:
 1. `NAME-4k-silent.mp4`: the master, 3840×2160 at 30 fps, picture only. An editor cuts this and adds their own voice-over.
@@ -15,6 +15,18 @@ The result is one continuous, automated take of the real app. It's scripted, so 
 **Requirements:** macOS on Apple Silicon (the TTS uses MLX), `uv`, `ffmpeg`, and Google Chrome (otherwise it falls back to Playwright's Chromium). Every script declares its own dependencies, so `uv run scripts/X.py` is all you need. The first TTS run downloads Kokoro (about 330 MB) and spaCy's small English model. The first Whisper run downloads `small` (about 460 MB). After that, set `HF_HUB_OFFLINE=1` to work offline. For a first Playwright run, use `uv run --with playwright playwright install chromium` if Chrome isn't installed.
 
 `scripts/` below means this skill's `scripts/` folder. The working directory holds one demo, and it lives in the user's project (for example `demo/`) or in the scratchpad, never in this skill.
+
+## Voice and models (tested: keep them)
+This combination has been used for full demo and deck recordings and sounds natural and clear. Use it unless the user asks for something else, and use the same settings for every clip in a project, so a demo and a deck spliced together sound like one speaker.
+
+| | Setting |
+|---|---|
+| Voice model | Kokoro-82M, `mlx-community/Kokoro-82M-bf16`, through `mlx-audio` on Apple Silicon |
+| Voice | `af_heart` (US English, warm), speed `1.0` |
+| Loudness | normalised to -16 LUFS, true peak -1.5 dB, AAC 160 kbps at 48 kHz (`build.py`, `deck.py`) |
+| Checking model | Whisper `small` through `faster-whisper`, 8-bit on the CPU (`asr.py`) |
+
+Other Kokoro voices to try if asked: `af_bella`, `am_michael`, `bf_emma`, `bm_george`. A voice change means regenerating every clip.
 
 ## Workflow
 
@@ -43,15 +55,18 @@ uv run scripts/phonemes.py WORKDIR
 uv run scripts/asr.py WORKDIR
 ```
 - **tts.py** writes `audio/<id>.wav` and `audio/durations.json`. To redo just some scenes: `SCENES=intro,close uv run scripts/tts.py WORKDIR`.
+- **Pauses:** Kokoro leaves only a short gap between sentences. Put `[pause]` (0.5 s) or `[pause 0.6]` in `say` where a listener needs a beat, for example between two steps of a flow: "They write over S3 or NFS. [pause 0.6] An element trigger reacts."
 - **phonemes.py** prints how names, acronyms and numbers will sound (`--all` prints every word). Whisper can't hear these differences, so read the output. Fix problems in `say`:
   - Leave plain capitals as they are: Kokoro reads `API`, `SDK`, `HTTP` and `NFS` as letters, with natural stress. Don't space them out. `A P I` turned the last letter into the pronoun "I" and came out as "AP, I".
   - Respell words that should be said as a word: `Jason` for JSON, `Tess` for TESS. Mixed forms need help too: `R O Crate`.
   - Write numbers as words when they're read out: "forty-four", "twenty thousand and seventy-six".
   - Split compounds the model runs together: "Data Engine", "Data Base".
-  - Or give exact phonemes: `[Croissant](/kɹwɑːsˈɒnt/)`, `[AI](/ˌAˈI/)`.
+  - Or give exact phonemes: `[Croissant](/kɹwɑːsˈɒnt/)`, `[AI](/ˌAˈI/)`, `[AI OS](/ˌAˈI ˌOˈɛs/)`.
+  - Spell URLs the way a person says them: "github dot com, slash acme dash tools".
+  - Names with a community pronunciation need a person who knows: for example the F-UJI tool is said like the mountain, so `say` has "Fuji". Ask the user when unsure; neither check below can tell.
   - Commas add short pauses, and rewording beats fighting a word ("can load directly" instead of "read directly", which came out as "red").
-- **asr.py** transcribes each clip with Whisper and flags any scene that doesn't match the script (`!!`). Fix those and re-run.
-- Voices: `af_heart` (US, warm) is the default. Others to try include `af_bella`, `am_michael`, `bf_emma` and `bm_george`.
+- **asr.py** transcribes each clip with Whisper and checks the sound. It marks with `!!`, and says why, any scene whose words don't match the script (`words`), that runs too fast or slow (`pace`), that clips (`clip`), that is louder or quieter than the rest (`level`), or that has a silence nobody asked for (`gap`). Fix those and re-run. Also skim the transcripts of scenes that pass: a slurred phrase can still score 0.92, and Whisper sometimes invents a "Thank you." in trailing silence.
+- Then listen to the whole narration once, start to finish. The checks find clips worth listening to; they don't judge tone or how a name should sound.
 
 ### 4. Script the tour
 Copy `templates/tour.py` to `WORKDIR/tour.py`. It defines `CONFIG` and `async def tour(r)`, which calls `r.start()` once the first view is ready and then runs one `async with r.scene("id"):` block per scene, in the same order as `scenes.json`. The Recorder (`scripts/record.py`) gives you:
@@ -87,6 +102,23 @@ uv run scripts/shotlist.py WORKDIR NAME "Title"
 
 ### 7. Deliver
 Send the three files in `out/` with a short note: the length, what changed since the last take, and anything the editor must keep, such as "not built in this demo" qualifiers.
+
+## Narrate a deck
+The same voice and checks turn a slide deck into a narrated walkthrough: each slide held for its narration, with captions and a shot list. It can stand alone or go either side of the demo video.
+
+1. **Slides:** export them at 3840×2160 into `WORKDIR/slides/`, either as numbered PNGs (`s-01.png` …) or as `deck.pdf` (from PowerPoint, Keynote or Google Slides), which `deck.py` renders with poppler's `pdftoppm` (`brew install poppler`). Use the final deck: any later wording change means new slides and new narration for that slide.
+2. **Talk track:** `WORKDIR/scenes.json`, one scene per narrated slide, in playing order: `id`, `slide` (its number, or put it in the id: `s07`), `step`, `text` and optional `say`, as for a demo. Skip slides the demo already shows. Add `"part": "part1"` / `"part2"` to split the walkthrough around a demo splice, and `"hold": 2.0` to hold a slide longer. The same rules apply: lead with the benefit, claim only what's built, and get the talk track approved first.
+3. **Narrate and check:** `tts.py`, `phonemes.py` and `asr.py`, exactly as in step 3, with the same voice and speed as the demo.
+4. **Build:**
+   ```bash
+   uv run scripts/deck.py WORKDIR NAME "Title"
+   ```
+   It writes `NAME-<part>-4k-narrated.mp4` and `-4k-silent.mp4` for each part (just `NAME-…` without parts), `NAME-full-…` with all parts back to back, `.srt` captions, and `NAME-shot-list.md` (with `WORKDIR/shotlist-notes.md` before the tables, if present). Look at a few frames: text is sharp, nothing is cut off.
+5. **Splice with the demo:** the deck and demo videos share codecs, frame rate and loudness, so they join without re-encoding:
+   ```bash
+   printf "file '%s'\n" deck-part1-4k-narrated.mp4 demo-4k-narrated.mp4 deck-part2-4k-narrated.mp4 > join.txt
+   ffmpeg -f concat -safe 0 -i join.txt -map 0 -c copy -movflags +faststart combined-4k.mp4
+   ```
 
 ## The recording checklist (from a marketing team's brief)
 - The talk track says what is happening and why it matters, at every step.
