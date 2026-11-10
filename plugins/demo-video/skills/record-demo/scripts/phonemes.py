@@ -20,6 +20,7 @@ p = load_model("mlx-community/Kokoro-82M-bf16")._get_pipeline("a")
 risky = re.compile(r"[A-Z].*[A-Z]|\d|[a-z][A-Z]|^[A-Z]|[-_./]")
 for s in json.load(open(f"{W}/scenes.json")):
     if ids and s["id"] not in ids: continue
-    toks = [t for t in p.g2p(s.get("say", s["text"]))[1] if t.phonemes and re.search(r"\w", t.text)]
+    say = re.sub(r"\[pause[^\]]*\]", " ", s.get("say", s["text"]))   # pauses are silence, not words
+    toks = [t for t in p.g2p(say)[1] if t.phonemes and re.search(r"\w", t.text)]
     show = [f"{t.text} /{t.phonemes}/" for t in toks if every or risky.search(t.text)]
     if show: print(f"[{s['id']}]  " + "   ".join(show))
