@@ -5,14 +5,14 @@ description: Record a narrated product demo video of a web app, scripted with Pl
 
 # Record a demo video
 
-The result is one continuous, automated take of the real app. It's scripted, so it can be re-recorded any time the app changes, and every take is identical apart from the change. Narration comes from Kokoro-82M, running locally. The same tools narrate a slide deck: see [Narrate a deck](#narrate-a-deck).
+The result is one continuous, automated take of the real app. It's scripted, so it can be re-recorded any time the app changes, and every take is identical apart from the change. Narration comes from Kokoro-82M, running locally on Apple Silicon (MLX) or Linux (ONNX CPU). The same tools narrate a slide deck: see [Narrate a deck](#narrate-a-deck).
 
 **Deliverables**, all in `WORKDIR/out/`:
 1. `NAME-4k-silent.mp4`: the master, 3840×2160 at 30 fps, picture only. An editor cuts this and adds their own voice-over.
 2. `NAME-4k-narrated.mp4`: the same picture with the narration and soft English captions. It's the reference for the talk track.
 3. `NAME-shot-list.md`: every step with its timecode, what's on screen, and the narration.
 
-**Requirements:** macOS on Apple Silicon (the TTS uses MLX), `uv`, `ffmpeg`, and Google Chrome (otherwise it falls back to Playwright's Chromium). Every script declares its own dependencies, so `uv run scripts/X.py` is all you need. The first TTS run downloads Kokoro (about 330 MB) and spaCy's small English model. The first Whisper run downloads `small` (about 460 MB). After that, set `HF_HUB_OFFLINE=1` to work offline. For a first Playwright run, use `uv run --with playwright playwright install chromium` if Chrome isn't installed.
+**Requirements:** Linux or macOS on Apple Silicon, `uv`, `ffmpeg`, and Chrome/Chromium. Linux uses CPU ONNX Runtime and bundled eSpeak NG; it does not install MLX, Torch or CUDA. Apple Silicon retains MLX. See [Linux setup](#linux-setup). Every script declares its own dependencies, so `uv run scripts/X.py` is all you need. The first TTS run downloads Kokoro (about 330 MB) and spaCy's small English model. The first Whisper run downloads `small` (about 460 MB). After that, set `HF_HUB_OFFLINE=1` to work offline. For a first Playwright run, use `uv run --with playwright playwright install chromium` if Chrome isn't installed.
 
 `scripts/` below means this skill's `scripts/` folder. The working directory holds one demo, and it lives in the user's project (for example `demo/`) or in the scratchpad, never in this skill.
 
@@ -21,12 +21,58 @@ This combination has been used for full demo and deck recordings and sounds natu
 
 | | Setting |
 |---|---|
-| Voice model | Kokoro-82M, `mlx-community/Kokoro-82M-bf16`, through `mlx-audio` on Apple Silicon |
+| Voice model | Kokoro-82M: `mlx-community/Kokoro-82M-bf16` / MLX on Apple Silicon; pinned Kokoro v1.0 / ONNX CPU on Linux |
 | Voice | `af_heart` (US English, warm), speed `1.0` |
 | Loudness | normalised to -16 LUFS, true peak -1.5 dB, AAC 160 kbps at 48 kHz (`build.py`, `deck.py`) |
 | Checking model | Whisper `small` through `faster-whisper`, 8-bit on the CPU (`asr.py`) |
 
 Other Kokoro voices to try if asked: `af_bella`, `am_michael`, `bf_emma`, `bm_george`. A voice change means regenerating every clip.
+
+## Linux setup
+
+Install `uv`, FFmpeg, and Chromium through your workspace's supported package
+installer. Use ordinary user permissions for scripts and project files. Then:
+
+```bash
+uv run scripts/tts.py WORKDIR af_heart 1.0
+uv run scripts/phonemes.py WORKDIR --all
+uv run scripts/asr.py WORKDIR
+uv run scripts/record.py WORKDIR http://localhost:8000
+DEMO_FFMPEG_PRESET=veryfast uv run scripts/build.py WORKDIR NAME
+```
+
+Here `scripts/` is this skill's directory, not a copied standalone script:
+`tts.py` and `phonemes.py` also need `speech_backend.py`. PEP 723 dependencies
+select the platform automatically. No GPU is required. Linux model assets come
+from the upstream `model-files-v1.1` release and are verified against pinned
+SHA-256 hashes before use. They occupy about 340 MB under
+`$XDG_CACHE_HOME/record-demo/kokoro-v1.0` (normally `~/.cache`). Override with
+`DEMO_KOKORO_DIR`. `HF_HUB_OFFLINE=1` rejects missing assets rather than downloading.
+Set `DEMO_TTS_THREADS` to limit CPU threads (default four).
+
+`DEMO_TTS_BACKEND=onnx` explicitly selects CPU speech; `mlx` requires Apple Silicon.
+The same `af_heart` voice is available, but ONNX/eSpeak and MLX/Misaki pronunciation
+and prosody can differ: do a new speech review, not a claim of bit-identical audio.
+On Linux `phonemes.py` shows the actual ONNX tokenizer's full phoneme line.
+Inline `[word](/phonemes/)` overrides and `[pause]` markers work on both paths.
+Keep a single backend and voice for a project; regenerate all speech when changing
+backend, voice or speed. `SCENES=...` is for changes within that same configuration.
+The duration manifest records backend/model provenance; `asr.py` retains its
+screening in `audio/asr-report.json`. This is not human listening approval.
+
+The recorder discovers system `chromium`/`google-chrome` on Linux. Set
+`DEMO_CHROME_EXECUTABLE=/absolute/path` or `CONFIG['executable_path']` to override.
+Without a system browser, install Playwright Chromium using
+`uv run --with playwright playwright install chromium`. The macOS 121px window
+correction is applied only on macOS; every captured frame still has to pass the
+native 4K size gate. A `hold` on a scene overrides the default end-of-scene hold.
+`DEMO_FFMPEG_PRESET` and `DEMO_FFMPEG_THREADS` control export cost (defaults `slow`
+and four threads). Changing the preset affects encoding effort, not output size.
+
+Validated on Linux with CPU synthesis, phoneme inspection, native 4K CDP capture,
+and narrated/silent export. macOS code is preserved but was not rerun in Linux.
+Run `python -m unittest discover -s scripts/tests` from this skill directory for
+platform-selection, asset-integrity and pronunciation-override checks.
 
 ## Workflow
 

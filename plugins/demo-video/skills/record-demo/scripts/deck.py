@@ -76,7 +76,7 @@ for name, items in runs.items():
     narr, silent = f"{OUT}/{name}-4k-narrated.mp4", f"{OUT}/{name}-4k-silent.mp4"
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", f"{OUT}/{name}.txt",
                     "-i", f"{OUT}/{name}.wav", "-i", f"{OUT}/{name}.srt", "-map", "0:v", "-map", "1:a", "-map", "2:s",
-                    "-vf", fit, "-c:v", "libx264", "-preset", "slow", "-crf", "18", "-tune", "stillimage",
+                    "-vf", fit, "-c:v", "libx264", "-preset", os.environ.get("DEMO_FFMPEG_PRESET", "slow"), "-threads", os.environ.get("DEMO_FFMPEG_THREADS", "4"), "-crf", "18", "-tune", "stillimage",
                     "-af", "loudnorm=I=-16:TP=-1.5:LRA=11", "-ar", "48000", "-c:a", "aac", "-b:a", "160k",
                     "-c:s", "mov_text", "-metadata:s:s:0", "language=eng", "-movflags", "+faststart", "-t", f"{t:.3f}", narr], check=True)
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", narr, "-map", "0:v", "-c", "copy", "-movflags", "+faststart", silent], check=True)

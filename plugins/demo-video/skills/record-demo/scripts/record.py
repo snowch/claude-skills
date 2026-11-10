@@ -14,7 +14,7 @@ WORKDIR holds scenes.json, audio/durations.json (written by tts.py) and tour.py,
 Writes WORKDIR/frames/NNNNN.jpg and WORKDIR/timeline.json, which build.py turns into video.
 Exits non-zero if any frame has the wrong size or anything matching CONFIG["leak"] was on screen.
 """
-import asyncio, base64, contextlib, importlib.util, json, math, os, re, shutil, struct, sys, time
+import asyncio, base64, contextlib, importlib.util, json, math, os, re, shutil, struct, sys, time, platform
 from playwright.async_api import async_playwright
 
 DEFAULTS = {
@@ -22,6 +22,7 @@ DEFAULTS = {
     "header": 0,          # px of the page covered by a sticky top bar, so scrolling clears it
     "hold": 1.4,          # still pause at the end of every scene: a clean cut point for the editor
     "color_scheme": "light",
+    "executable_path": os.environ.get("DEMO_CHROME_EXECUTABLE"),
     "channel": "chrome",  # installed Google Chrome; None uses Playwright's bundled Chromium
     "scrub": [],          # [[js_regex, replacement], ...] applied to every text node and href/title/value/placeholder
     "leak": None,         # Python regex: fail the take if it matches the visible page text at the end of any scene
@@ -102,8 +103,12 @@ class Recorder:
     async def open(self, p):
         W, H, DPR = self.W, self.H, self.DPR
         args = [f"--window-size={W},{H + 200}", f"--force-device-scale-factor={DPR}"]
-        try: self.browser = await p.chromium.launch(channel=self.c["channel"], args=args)
-        except Exception: self.browser = await p.chromium.launch(args=args)
+        executable = self.c["executable_path"]
+        if not executable and platform.system() == "Linux": executable = shutil.which("chromium") or shutil.which("google-chrome")
+        if executable: self.browser = await p.chromium.launch(executable_path=executable, args=args)
+        else:
+            try: self.browser = await p.chromium.launch(channel=self.c["channel"], args=args)
+            except Exception: self.browser = await p.chromium.launch(args=args)
         self.ctx = await self.browser.new_context(viewport={"width": W, "height": H}, device_scale_factor=DPR, color_scheme=self.c["color_scheme"])
         await self.ctx.add_init_script(PAGE.replace("__RULES__", json.dumps(self.c["scrub"])).replace("__INIT__", self.c["init_js"] or ";"))
         self.pg = await self.ctx.new_page()
@@ -111,6 +116,7 @@ class Recorder:
         # The screencast sometimes captures the real window instead of the emulated page, and the real window loses
         # about 121px to the browser's own top bar: size the window so both are exactly W x H.
         try:
+            if platform.system() != "Darwin": raise RuntimeError("No macOS window correction on Linux")
             win = await self.cdp.send("Browser.getWindowForTarget")
             await self.cdp.send("Browser.setWindowBounds", {"windowId": win["windowId"], "bounds": {"width": W, "height": H + 121}})
         except Exception: pass
@@ -161,7 +167,8 @@ class Recorder:
         self.current = sid; t0 = time.time(); self.timeline.append({"id": sid, "t": t0}); print("scene", sid, flush=True)
         yield
         if self.leak: self.leaks |= {m.group(0) for m in self.leak.finditer(await self.pg.inner_text("body"))}
-        rest = t0 + self.durs[sid] + self.c["hold"] - time.time()
+        scene_hold = self.c.get("scene_holds", {}).get(sid, self.c["hold"])
+        rest = t0 + self.durs[sid] + scene_hold - time.time()
         if rest > 0: await asyncio.sleep(rest)
         else:
             await self.hold(); print(f"  actions ran {-rest + self.c['hold']:.1f}s past the narration: trim them or lengthen the line", flush=True)
@@ -249,6 +256,7 @@ async def main():
     workdir, base = os.path.abspath(sys.argv[1]), sys.argv[2]
     spec = importlib.util.spec_from_file_location("tour", f"{workdir}/tour.py"); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
     cfg = {**DEFAULTS, **getattr(mod, "CONFIG", {})}
+    cfg["scene_holds"] = {s["id"]: float(s.get("hold", cfg["hold"])) for s in json.load(open(f"{workdir}/scenes.json"))}
     durs = json.load(open(f"{workdir}/audio/durations.json"))["durations"]
     shutil.rmtree(f"{workdir}/frames", ignore_errors=True); os.makedirs(f"{workdir}/frames")
     r = Recorder(workdir, base, cfg, durs)
@@ -274,7 +282,7 @@ async def main():
     tl = json.load(open(f"{workdir}/timeline.json")); tl["bad"] = bad; json.dump(tl, open(f"{workdir}/timeline.json", "w"))
     print(len(r.frames), "frames;", f"all {W}x{H}" if not bad else f"{len(bad)} not {W}x{H} (e.g. {r.badsize[0][1]}), longest run {longest:.2f}s" + (": dropped in the build" if longest <= 0.3 else ": TOO LONG, re-record"))
     print("LEAKS ON SCREEN: " + ", ".join(sorted(r.leaks)) if r.leaks else "no leaks on screen")
-    if longest > 0.3 or r.leaks: sys.exit(1)
+    if longest > 0.3 or r.leaks or r.problems: sys.exit(1)
 
 if __name__ == "__main__":
     asyncio.run(main())
