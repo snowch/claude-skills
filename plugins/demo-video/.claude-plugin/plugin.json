@@ -1,6 +1,6 @@
 {
   "name": "demo-video",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Record narrated 4K product demo videos of web apps with Playwright and a local TTS voice, and narrate slide decks in the same voice: silent masters, narrated references and shot lists.",
   "author": {
     "name": "Chris Snow"

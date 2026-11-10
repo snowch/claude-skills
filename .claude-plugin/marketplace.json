@@ -11,7 +11,7 @@
       "name": "demo-video",
       "source": "./plugins/demo-video",
       "description": "Record narrated 4K product demo videos of web apps, and narrated slide-deck walkthroughs, with a local TTS voice.",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "category": "productivity"
     }
   ]

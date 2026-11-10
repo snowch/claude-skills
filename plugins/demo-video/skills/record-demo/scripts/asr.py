@@ -79,3 +79,5 @@ for r in rows:
               f"longest gap {r['gap']:.1f} s")
         if "words" in why: print(f"   {'script':14} {r['text']}")
 print(f"{flagged} scene(s) to listen to" if flagged else "all scenes match the script")
+
+json.dump({"method":"independent Whisper screening; not listening approval", "model":sys.argv[2] if len(sys.argv)>2 else "small", "flagged":flagged, "scenes":rows}, open(f"{W}/audio/asr-report.json", "w"), indent=2)
